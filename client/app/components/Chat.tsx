@@ -1,7 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import { Loader, LoaderCircle } from 'lucide-react';
+import { Loader } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Doc {
   pageContent?: string;
@@ -28,7 +30,7 @@ const ChatComponent: React.FC = () =>{
  const handleChatMessage = async() =>{
     setMessages((prev) => [...prev, { role: 'user', content: message }]);
     setLoading(true);
-       const res = await fetch(`http://localhost:8000/chat?message=${message}`);
+       const res = await fetch(`http://localhost:8000/chat?message=${encodeURIComponent(message)}`);
 
        const data = await res.json();
 
@@ -53,13 +55,21 @@ const ChatComponent: React.FC = () =>{
     {messages.map((message, index) => (
       <div
         key={index}
-        className={`p-3 rounded-lg max-w-[80%] whitespace-pre-wrap ${
+        className={`p-3 rounded-lg max-w-[80%] ${
           message.role === "user"
             ? "bg-blue-600 self-end ml-auto"
             : "bg-[#2a2a2a] self-start"
         }`}
       >
-        {message.content}
+        {message.role === "assistant" ? (
+          <div className="markdown-body">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {message.content ?? ""}
+            </ReactMarkdown>
+          </div>
+        ) : (
+          <span className="whitespace-pre-wrap">{message.content}</span>
+        )}
       </div>
     ))}
   </div>

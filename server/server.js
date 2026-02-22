@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import "dotenv/config";
 import multer from "multer";
 import { Queue } from "bullmq";
 import { HuggingFaceInferenceEmbeddings } from "@langchain/community/embeddings/hf";
@@ -51,13 +52,12 @@ app.get("/chat", async (req, res) => {
 
   const embeddings = new HuggingFaceInferenceEmbeddings({
     apiKey: process.env.API_KEY, // Defaults to process.env.HUGGINGFACEHUB_API_KEY
-    model: "", // Defaults to `BAAI/bge-base-en-v1.5` if not provided
   });
 
   const vectorStore = await QdrantVectorStore.fromExistingCollection(
     embeddings,
     {
-      url: process.env.QDRANT_URL,
+      url: process.env.QDRANT_URL || "http://localhost:6333",
       collectionName: "langchainjs-testing",
     }
   );
@@ -68,7 +68,16 @@ app.get("/chat", async (req, res) => {
   const result = await ret.invoke(userQuery);
 
   const SYSTEM_PROMPT = `
-  You are helfull AI Assistant who answeres the user query based on the available context from PDF File.
+  You are a helpful AI assistant.
+  Answer the user query only from the PDF context.
+  Always format output in clean Markdown.
+  Use this structure:
+  ## Summary
+  ## Key Details
+  ## Notes / Unclear Fields
+  ## Final Takeaway
+  Use bullet lists and tables where useful.
+  Mention when a field is unclear instead of guessing.
   Context:
   ${JSON.stringify(result)}
   `;
@@ -94,3 +103,5 @@ app.get("/chat", async (req, res) => {
 });
 
 app.listen(8000, () => console.log("server stareted on port:${8000}"));
+
+

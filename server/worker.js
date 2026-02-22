@@ -1,4 +1,5 @@
 import { Worker } from "bullmq";
+import "dotenv/config";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { CharacterTextSplitter } from "@langchain/textsplitters";
 
@@ -28,13 +29,12 @@ const worker = new Worker(
 
     const embeddings = new HuggingFaceInferenceEmbeddings({
       apiKey: process.env.API_KEY, // Defaults to process.env.HUGGINGFACEHUB_API_KEY
-      model: "", // Defaults to `BAAI/bge-base-en-v1.5` if not provided
     });
 
     const vectorStore = await QdrantVectorStore.fromExistingCollection(
       embeddings,
       {
-        url: "http://localhost:6333",
+        url: process.env.QDRANT_URL || "http://localhost:6333",
         collectionName: "langchainjs-testing",
       }
     );
@@ -55,3 +55,5 @@ const worker = new Worker(
     },
   }
 );
+
+
