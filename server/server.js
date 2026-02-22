@@ -41,7 +41,7 @@ app.post("/upload/pdf", upload.single("pdf"), async (req, res) => {
       filename: req.file.originalname,
       destination: req.file.destination,
       path: req.file.path,
-    })
+    }),
   );
   return res.json({ message: "uplodaed" });
 });
@@ -59,7 +59,7 @@ app.get("/chat", async (req, res) => {
     {
       url: process.env.QDRANT_URL || "http://localhost:6333",
       collectionName: "langchainjs-testing",
-    }
+    },
   );
 
   const ret = vectorStore.asRetriever({
@@ -102,6 +102,5 @@ app.get("/chat", async (req, res) => {
   });
 });
 
-app.listen(8000, () => console.log("server stareted on port:${8000}"));
-
-
+const PORT = process.env.PORT || 10000;
+app.listen(PORT);
