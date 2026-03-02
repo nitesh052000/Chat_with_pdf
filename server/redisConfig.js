@@ -17,9 +17,9 @@ export function getRedisConnectionConfig() {
   const redisHost = process.env.REDIS_HOST;
   const redisPort = process.env.REDIS_PORT;
 
-  if (redisHost) {
+  if (redisHost || redisPort) {
     return {
-      host: redisHost,
+      host: redisHost || "localhost",
       port: Number(redisPort || 6379),
     };
   }

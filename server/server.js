@@ -9,12 +9,12 @@ import { ChatMistralAI } from "@langchain/mistralai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { getRedisConnectionConfig } from "./redisConfig.js";
 
-const redisConnection = getRedisConnectionConfig();
-const queue = redisConnection
-  ? new Queue("file-upload-queue", {
-      connection: redisConnection,
-    })
-  : null;
+const queue = new Queue("file-upload-queue", {
+  connection: {
+    host: process.env.REDIS_HOST || "localhost",
+    port: Number(process.env.REDIS_PORT || 6379),
+  },
+});
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
