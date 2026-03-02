@@ -7,6 +7,16 @@ import { HuggingFaceInferenceEmbeddings } from "@langchain/community/embeddings/
 import { QdrantVectorStore } from "@langchain/qdrant";
 import { Document } from "@langchain/core/documents";
 import { QdrantClient } from "@qdrant/js-client-rest";
+import { getRedisConnectionConfig } from "./redisConfig.js";
+
+const redisConnection = getRedisConnectionConfig();
+
+if (!redisConnection) {
+  console.error(
+    "Redis is not configured. Set REDIS_URL or REDIS_HOST/REDIS_PORT.",
+  );
+  process.exit(1);
+}
 
 const worker = new Worker(
   "file-upload-queue",
