@@ -7,13 +7,14 @@ import { HuggingFaceInferenceEmbeddings } from "@langchain/community/embeddings/
 import { QdrantVectorStore } from "@langchain/qdrant";
 import { ChatMistralAI } from "@langchain/mistralai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { getRedisConnectionConfig } from "./redisConfig.js";
 
-const queue = new Queue("file-upload-queue", {
-  connection: {
-    host: "localhost",
-    port: "6379",
-  },
-});
+const redisConnection = getRedisConnectionConfig();
+const queue = redisConnection
+  ? new Queue("file-upload-queue", {
+      connection: redisConnection,
+    })
+  : null;
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -35,6 +36,13 @@ app.get("/", (req, res) => {
 });
 
 app.post("/upload/pdf", upload.single("pdf"), async (req, res) => {
+  if (!queue) {
+    return res.status(503).json({
+      message:
+        "Queue is not configured. Set REDIS_URL or REDIS_HOST/REDIS_PORT.",
+    });
+  }
+
   await queue.add(
     "file-ready",
     JSON.stringify({
