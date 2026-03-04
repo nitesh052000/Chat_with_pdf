@@ -9,12 +9,19 @@ import { ChatMistralAI } from "@langchain/mistralai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { getRedisConnectionConfig } from "./redisConfig.js";
 
-const queue = new Queue("file-upload-queue", {
-  connection: {
-    host: process.env.REDIS_HOST || "localhost",
-    port: Number(process.env.REDIS_PORT || 6379),
-  },
-});
+const redisConnection = getRedisConnectionConfig();
+
+if (!redisConnection) {
+  console.warn(
+    "Redis is not configured. Set REDIS_URL or REDIS_HOST/REDIS_PORT to enable PDF upload queue.",
+  );
+}
+
+const queue = redisConnection
+  ? new Queue("file-upload-queue", {
+      connection: redisConnection,
+    })
+  : null;
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {

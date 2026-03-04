@@ -27,7 +27,7 @@ const ChatComponent: React.FC = () =>{
     const [messages,setMessages] = React.useState<IMessage[]>([]);
     const [loading , setLoading] = React.useState<Boolean>(false);
 
- const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+ const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:10000';
 
  const handleChatMessage = async() =>{
     setMessages((prev) => [...prev, { role: 'user', content: message }]);
@@ -99,3 +99,4 @@ const ChatComponent: React.FC = () =>{
 }
 
 export default ChatComponent;
+

@@ -19,7 +19,7 @@ const FileUpload:React.FC = () => {
        const formData = new FormData();
        formData.append('pdf',file);
 
-       const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+       const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:10000';
 
        await fetch(`${apiBaseUrl}/upload/pdf`,{
         method:'POST',
@@ -55,3 +55,4 @@ const FileUpload:React.FC = () => {
 }
 
 export default FileUpload
+
