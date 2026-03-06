@@ -26,7 +26,7 @@ const FileUpload:React.FC = () => {
         body:formData,
        });
        toast.success("File uploaded sucessfully! Enjoy Talking")
-      }catch(err){
+      }catch{
         toast.error("Error in uploading files")
       }
     }

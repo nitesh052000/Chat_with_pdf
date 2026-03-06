@@ -25,7 +25,7 @@ const ChatComponent: React.FC = () =>{
 
     const [message,setMessage] = React.useState<string>('');
     const [messages,setMessages] = React.useState<IMessage[]>([]);
-    const [loading , setLoading] = React.useState<Boolean>(false);
+    const [loading , setLoading] = React.useState<boolean>(false);
 
  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:10000';
 
