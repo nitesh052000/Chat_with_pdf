@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Loader } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { getApiBaseUrl } from '@/lib/api';
 
 interface Doc {
   pageContent?: string;
@@ -27,7 +28,7 @@ const ChatComponent: React.FC = () =>{
     const [messages,setMessages] = React.useState<IMessage[]>([]);
     const [loading , setLoading] = React.useState<boolean>(false);
 
- const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:10000';
+ const apiBaseUrl = getApiBaseUrl();
 
  const handleChatMessage = async() =>{
     setMessages((prev) => [...prev, { role: 'user', content: message }]);

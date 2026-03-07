@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import * as React from 'react';
 import { Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getApiBaseUrl } from '@/lib/api';
 
 const FileUpload:React.FC = () => {
    
@@ -19,7 +20,7 @@ const FileUpload:React.FC = () => {
        const formData = new FormData();
        formData.append('pdf',file);
 
-       const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:10000';
+       const apiBaseUrl = getApiBaseUrl();
 
        await fetch(`${apiBaseUrl}/upload/pdf`,{
         method:'POST',
