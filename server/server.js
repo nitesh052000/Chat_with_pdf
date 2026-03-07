@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import "dotenv/config";
 import multer from "multer";
+import fs from "node:fs";
 import { Queue } from "bullmq";
 import { HuggingFaceInferenceEmbeddings } from "@langchain/community/embeddings/hf";
 import { QdrantVectorStore } from "@langchain/qdrant";
@@ -23,6 +24,8 @@ const queue = redisConnection
     })
   : null;
 
+fs.mkdirSync("uploads", { recursive: true });
+
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, "uploads/");
@@ -36,53 +39,84 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 const app = express();
-app.use(cors());
+
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.CORS_ORIGIN,
+].filter(Boolean);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`Origin ${origin} is not allowed by CORS.`));
+    },
+  }),
+);
 
 app.get("/", (req, res) => {
   res.json({ status: "All cool" });
 });
 
 app.post("/upload/pdf", upload.single("pdf"), async (req, res) => {
-  if (!queue) {
-    return res.status(503).json({
-      message:
-        "Queue is not configured. Set REDIS_URL or REDIS_HOST/REDIS_PORT.",
-    });
-  }
+  try {
+    if (!queue) {
+      return res.status(503).json({
+        message:
+          "Queue is not configured. Set REDIS_URL or REDIS_HOST/REDIS_PORT.",
+      });
+    }
 
-  await queue.add(
-    "file-ready",
-    JSON.stringify({
-      filename: req.file.originalname,
-      destination: req.file.destination,
-      path: req.file.path,
-    }),
-  );
-  return res.json({ message: "uplodaed" });
+    if (!req.file) {
+      return res.status(400).json({ message: "No PDF file was uploaded." });
+    }
+
+    await queue.add(
+      "file-ready",
+      JSON.stringify({
+        filename: req.file.originalname,
+        destination: req.file.destination,
+        path: req.file.path,
+      }),
+    );
+    return res.json({ message: "Uploaded" });
+  } catch (error) {
+    console.error("Upload failed", error);
+    return res.status(500).json({ message: "Failed to upload PDF." });
+  }
 });
 
 app.get("/chat", async (req, res) => {
-  const userQuery = req.query.message;
-  console.log("quest", userQuery);
+  try {
+    const userQuery = req.query.message;
 
-  const embeddings = new HuggingFaceInferenceEmbeddings({
-    apiKey: process.env.API_KEY, // Defaults to process.env.HUGGINGFACEHUB_API_KEY
-  });
+    if (!userQuery || typeof userQuery !== "string") {
+      return res.status(400).json({ message: "Query parameter 'message' is required." });
+    }
 
-  const vectorStore = await QdrantVectorStore.fromExistingCollection(
-    embeddings,
-    {
-      url: process.env.QDRANT_URL || "http://localhost:6333",
-      collectionName: "langchainjs-testing",
-    },
-  );
+    console.log("quest", userQuery);
 
-  const ret = vectorStore.asRetriever({
-    k: 2,
-  });
-  const result = await ret.invoke(userQuery);
+    const embeddings = new HuggingFaceInferenceEmbeddings({
+      apiKey: process.env.API_KEY,
+    });
 
-  const SYSTEM_PROMPT = `
+    const vectorStore = await QdrantVectorStore.fromExistingCollection(
+      embeddings,
+      {
+        url: process.env.QDRANT_URL || "http://localhost:6333",
+        collectionName: "langchainjs-testing",
+      },
+    );
+
+    const ret = vectorStore.asRetriever({
+      k: 2,
+    });
+    const result = await ret.invoke(userQuery);
+
+    const SYSTEM_PROMPT = `
   You are a helpful AI assistant.
   Answer the user query only from the PDF context.
   Always format output in clean Markdown.
@@ -97,24 +131,31 @@ app.get("/chat", async (req, res) => {
   ${JSON.stringify(result)}
   `;
 
-  const model = new ChatMistralAI({
-    model: "mistral-large-latest",
-    apiKey: process.env.MISTRAL_API_KEY,
-    temperature: 0,
-  });
+    const model = new ChatMistralAI({
+      model: "mistral-large-latest",
+      apiKey: process.env.MISTRAL_API_KEY,
+      temperature: 0,
+    });
 
-  const messages = [
-    new SystemMessage(SYSTEM_PROMPT),
-    new HumanMessage(userQuery),
-  ];
+    const messages = [
+      new SystemMessage(SYSTEM_PROMPT),
+      new HumanMessage(userQuery),
+    ];
 
-  const chatResult = await model.invoke(messages);
-  console.log("content", chatResult);
+    const chatResult = await model.invoke(messages);
+    console.log("content", chatResult);
 
-  return res.json({
-    message: chatResult.content,
-    docs: result,
-  });
+    return res.json({
+      message: chatResult.content,
+      docs: result,
+    });
+  } catch (error) {
+    console.error("Chat failed", error);
+    return res.status(500).json({
+      message: "Chat request failed.",
+      error: error instanceof Error ? error.message : "Unknown server error",
+    });
+  }
 });
 
 const PORT = process.env.PORT || 10000;
