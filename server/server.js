@@ -11,6 +11,7 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { getRedisConnectionConfig } from "./redisConfig.js";
 
 const redisConnection = getRedisConnectionConfig();
+const COLLECTION_NAME = process.env.QDRANT_COLLECTION || "langchainjs-testing";
 
 if (!redisConnection) {
   console.warn(
@@ -39,6 +40,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 const app = express();
+app.use(express.json({ limit: "1mb" }));
 
 const allowedOrigins = [
   process.env.FRONTEND_URL,
@@ -48,7 +50,11 @@ const allowedOrigins = [
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      if (
+        !origin ||
+        allowedOrigins.length === 0 ||
+        allowedOrigins.includes(origin)
+      ) {
         return callback(null, true);
       }
 
@@ -59,6 +65,38 @@ app.use(
 
 app.get("/", (req, res) => {
   res.json({ status: "All cool" });
+});
+
+app.get("/health", async (req, res) => {
+  const missing = [];
+  if (!process.env.API_KEY) missing.push("API_KEY");
+  if (!process.env.MISTRAL_API_KEY) missing.push("MISTRAL_API_KEY");
+  if (process.env.NODE_ENV === "production" && !process.env.QDRANT_URL) {
+    missing.push("QDRANT_URL");
+  }
+
+  // Keep it low-cost: only confirm Qdrant responds if configured.
+  let qdrantOk = null;
+  if (process.env.QDRANT_URL) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+      const resp = await fetch(`${process.env.QDRANT_URL}/collections`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      qdrantOk = resp.ok;
+    } catch {
+      qdrantOk = false;
+    }
+  }
+
+  return res.json({
+    ok: missing.length === 0,
+    missing,
+    qdrant: qdrantOk,
+    redisQueue: Boolean(queue),
+  });
 });
 
 app.post("/upload/pdf", upload.single("pdf"), async (req, res) => {
@@ -94,10 +132,25 @@ app.get("/chat", async (req, res) => {
     const userQuery = req.query.message;
 
     if (!userQuery || typeof userQuery !== "string") {
-      return res.status(400).json({ message: "Query parameter 'message' is required." });
+      return res
+        .status(400)
+        .json({ message: "Query parameter 'message' is required." });
     }
 
     console.log("quest", userQuery);
+
+    const missing = [];
+    if (!process.env.API_KEY) missing.push("API_KEY");
+    if (!process.env.MISTRAL_API_KEY) missing.push("MISTRAL_API_KEY");
+    if (process.env.NODE_ENV === "production" && !process.env.QDRANT_URL) {
+      missing.push("QDRANT_URL");
+    }
+    if (missing.length > 0) {
+      return res.status(503).json({
+        message: "Server is missing required configuration.",
+        missing,
+      });
+    }
 
     const embeddings = new HuggingFaceInferenceEmbeddings({
       apiKey: process.env.API_KEY,
@@ -107,7 +160,7 @@ app.get("/chat", async (req, res) => {
       embeddings,
       {
         url: process.env.QDRANT_URL || "http://localhost:6333",
-        collectionName: "langchainjs-testing",
+        collectionName: COLLECTION_NAME,
       },
     );
 
@@ -115,6 +168,14 @@ app.get("/chat", async (req, res) => {
       k: 2,
     });
     const result = await ret.invoke(userQuery);
+
+    if (!Array.isArray(result) || result.length === 0) {
+      return res.status(409).json({
+        message:
+          "No PDF content is indexed yet (or no relevant chunks were found). Upload a PDF first.",
+        docs: [],
+      });
+    }
 
     const SYSTEM_PROMPT = `
   You are a helpful AI assistant.
@@ -151,12 +212,20 @@ app.get("/chat", async (req, res) => {
     });
   } catch (error) {
     console.error("Chat failed", error);
-    return res.status(500).json({
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    const isLikelyDependencyIssue =
+      /ECONNREFUSED|ENOTFOUND|fetch failed|socket|timed out|timeout|503|502|504/i.test(
+        rawMessage,
+      );
+
+    return res.status(isLikelyDependencyIssue ? 503 : 500).json({
       message: "Chat request failed.",
-      error: error instanceof Error ? error.message : "Unknown server error",
+      error: rawMessage,
     });
   }
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT);
+app.listen(PORT, () => {
+  console.log(`Server listening on ${PORT}`);
+});

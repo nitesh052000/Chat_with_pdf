@@ -27,25 +27,50 @@ const ChatComponent: React.FC = () =>{
     const [message,setMessage] = React.useState<string>('');
     const [messages,setMessages] = React.useState<IMessage[]>([]);
     const [loading , setLoading] = React.useState<boolean>(false);
+    const [error, setError] = React.useState<string | null>(null);
 
  const apiBaseUrl = getApiBaseUrl();
 
  const handleChatMessage = async() =>{
+    if (!message.trim()) return;
+    setError(null);
     setMessages((prev) => [...prev, { role: 'user', content: message }]);
     setLoading(true);
-       const res = await fetch(`${apiBaseUrl}/chat?message=${encodeURIComponent(message)}`);
 
-       const data = await res.json();
+    try {
+      const res = await fetch(
+        `${apiBaseUrl}/chat?message=${encodeURIComponent(message)}`,
+      );
 
-       console.log("res",res);
+      // Render/load balancers can return non-JSON bodies (HTML). Handle both.
+      const text = await res.text();
+      const data = (() => {
+        try {
+          return JSON.parse(text);
+        } catch {
+          return null;
+        }
+      })();
 
-       setMessages((prev)=>[
+      if (!res.ok) {
+        const serverMsg =
+          (data && (data.message || data.error)) ||
+          `Request failed with status ${res.status}`;
+        setError(String(serverMsg));
+        return;
+      }
+
+      setMessages((prev)=>[
         ...prev ,{ role: 'assistant',
         content: data?.message,
         documents: data?.docs,}
-       ]);
-       setLoading(false);
-       setMessage("");
+      ]);
+      setMessage("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setLoading(false);
+    }
  };
 
  return (
@@ -55,6 +80,11 @@ const ChatComponent: React.FC = () =>{
 
   {/* Chat Messages Area */}
   <div className="flex-1 overflow-y-auto space-y-3 p-2">
+    {error ? (
+      <div className="p-3 rounded-lg bg-red-700/40 border border-red-500/40">
+        {error}
+      </div>
+    ) : null}
     {messages.map((message, index) => (
       <div
         key={index}

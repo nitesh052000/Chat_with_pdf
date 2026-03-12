@@ -7,23 +7,13 @@ import { HuggingFaceInferenceEmbeddings } from "@langchain/community/embeddings/
 import { QdrantVectorStore } from "@langchain/qdrant";
 import { Document } from "@langchain/core/documents";
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { getRedisConnectionConfig } from "./redisConfig.js";
-
-const redisConnection = getRedisConnectionConfig();
-
-if (!redisConnection) {
-  console.error(
-    "Redis is not configured. Set REDIS_URL or REDIS_HOST/REDIS_PORT.",
-  );
-  process.exit(1);
-}
-
-const worker = new Worker(
-  "file-upload-queue",
-  async (job) => {
-    console.log("Job", job.data);
-    const data = JSON.parse(job.data);
-    /*
+export const initWorker = (redisConnection) =>
+  new Worker(
+    "file-upload-queue",
+    async (job) => {
+      console.log("Job", job.data);
+      const data = JSON.parse(job.data);
+      /*
     Path: data.path
     read the pdf from path,
     chunk the pdf,
@@ -31,36 +21,35 @@ const worker = new Worker(
     store the chunk in qdrant db
     */
 
-    const loader = new PDFLoader(data.path);
-    const docs = await loader.load();
+      const loader = new PDFLoader(data.path);
+      const docs = await loader.load();
 
-    console.log("DOCS LOADED:", docs.length);
-    console.log(docs[0]?.pageContent.slice(0, 500));
+      console.log("DOCS LOADED:", docs.length);
+      console.log(docs[0]?.pageContent.slice(0, 500));
 
-    const embeddings = new HuggingFaceInferenceEmbeddings({
-      apiKey: process.env.API_KEY, // Defaults to process.env.HUGGINGFACEHUB_API_KEY
-    });
+      const embeddings = new HuggingFaceInferenceEmbeddings({
+        apiKey: process.env.API_KEY, // Defaults to process.env.HUGGINGFACEHUB_API_KEY
+      });
 
-    const vectorStore = await QdrantVectorStore.fromExistingCollection(
-      embeddings,
-      {
-        url: process.env.QDRANT_URL || "http://localhost:6333",
-        collectionName: "langchainjs-testing",
+      const vectorStore = await QdrantVectorStore.fromExistingCollection(
+        embeddings,
+        {
+          url: process.env.QDRANT_URL || "http://localhost:6333",
+          collectionName:
+            process.env.QDRANT_COLLECTION || "langchainjs-testing",
+        },
+      );
+      try {
+        await vectorStore.addDocuments(docs);
+        console.log(`✅ All docs are added to vector store`);
+      } catch (error) {
+        console.error("❌ Error adding documents to vector store:", error);
       }
-    );
-    try {
-      await vectorStore.addDocuments(docs);
-      console.log(`✅ All docs are added to vector store`);
-    } catch (error) {
-      console.error("❌ Error adding documents to vector store:", error);
-    }
 
-    console.log(`All docs are added to vector store`);
-  },
-  {
-    concurrency: 100,
-    connection: redisConnection,
-  }
-);
-
-
+      console.log(`All docs are added to vector store`);
+    },
+    {
+      concurrency: 5,
+      connection: redisConnection,
+    },
+  );
