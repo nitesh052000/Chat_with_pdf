@@ -9,6 +9,7 @@ import { QdrantVectorStore } from "@langchain/qdrant";
 import { ChatMistralAI } from "@langchain/mistralai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { getRedisConnectionConfig } from "./redisConfig.js";
+import { initWorker } from "./worker.js";
 
 const redisConnection = getRedisConnectionConfig();
 const COLLECTION_NAME = process.env.QDRANT_COLLECTION || "langchainjs-testing";
@@ -24,6 +25,11 @@ const queue = redisConnection
       connection: redisConnection,
     })
   : null;
+
+if (redisConnection) {
+  initWorker(redisConnection);
+  console.log("Background worker started for file processing.");
+}
 
 fs.mkdirSync("uploads", { recursive: true });
 
