@@ -111,8 +111,6 @@ app.get("/chat", async (req, res) => {
         .json({ message: "Query parameter 'message' is required." });
     }
 
-    console.log("quest", userQuery);
-
     const missing = [];
     if (!process.env.API_KEY) missing.push("API_KEY");
     if (!process.env.MISTRAL_API_KEY) missing.push("MISTRAL_API_KEY");

@@ -2,33 +2,37 @@ import { Worker } from "bullmq";
 import "dotenv/config";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { CharacterTextSplitter } from "@langchain/textsplitters";
-
 import { HuggingFaceInferenceEmbeddings } from "@langchain/community/embeddings/hf";
 import { QdrantVectorStore } from "@langchain/qdrant";
-import { Document } from "@langchain/core/documents";
-import { QdrantClient } from "@qdrant/js-client-rest";
+
 export const initWorker = (redisConnection) =>
   new Worker(
     "file-upload-queue",
     async (job) => {
       console.log("Job", job.data);
       const data = JSON.parse(job.data);
-      /*
-    Path: data.path
-    read the pdf from path,
-    chunk the pdf,
-    call the openai embedding model for every chunk,
-    store the chunk in qdrant db
-    */
 
+      // 1. Load the PDF
       const loader = new PDFLoader(data.path);
       const docs = await loader.load();
+      console.log("PAGES LOADED:", docs.length);
 
-      console.log("DOCS LOADED:", docs.length);
-      console.log(docs[0]?.pageContent.slice(0, 500));
+      // 2. Configure the Splitter
+      const splitter = new CharacterTextSplitter({
+        separator: "\n",
+        chunkSize: 1000,
+        chunkOverlap: 200,
+      });
 
+      // 3. Chop the pages into chunks
+      const chunkedDocs = await splitter.splitDocuments(docs);
+      console.log(
+        `Split ${docs.length} pages into ${chunkedDocs.length} chunks.`,
+      );
+
+      // 4. Set up Embeddings & Vector Store
       const embeddings = new HuggingFaceInferenceEmbeddings({
-        apiKey: process.env.API_KEY, // Defaults to process.env.HUGGINGFACEHUB_API_KEY
+        apiKey: process.env.API_KEY,
       });
 
       const vectorStore = await QdrantVectorStore.fromExistingCollection(
@@ -39,14 +43,14 @@ export const initWorker = (redisConnection) =>
             process.env.QDRANT_COLLECTION || "langchainjs-testing",
         },
       );
+
+      // 5. Store the chunks in Qdrant
       try {
-        await vectorStore.addDocuments(docs);
-        console.log(`✅ All docs are added to vector store`);
+        await vectorStore.addDocuments(chunkedDocs);
+        console.log(`✅ All chunks are added to the vector store`);
       } catch (error) {
         console.error("❌ Error adding documents to vector store:", error);
       }
-
-      console.log(`All docs are added to vector store`);
     },
     {
       concurrency: 5,
