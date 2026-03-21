@@ -73,38 +73,6 @@ app.get("/", (req, res) => {
   res.json({ status: "All cool" });
 });
 
-app.get("/health", async (req, res) => {
-  const missing = [];
-  if (!process.env.API_KEY) missing.push("API_KEY");
-  if (!process.env.MISTRAL_API_KEY) missing.push("MISTRAL_API_KEY");
-  if (process.env.NODE_ENV === "production" && !process.env.QDRANT_URL) {
-    missing.push("QDRANT_URL");
-  }
-
-  // Keep it low-cost: only confirm Qdrant responds if configured.
-  let qdrantOk = null;
-  if (process.env.QDRANT_URL) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2000);
-      const resp = await fetch(`${process.env.QDRANT_URL}/collections`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      qdrantOk = resp.ok;
-    } catch {
-      qdrantOk = false;
-    }
-  }
-
-  return res.json({
-    ok: missing.length === 0,
-    missing,
-    qdrant: qdrantOk,
-    redisQueue: Boolean(queue),
-  });
-});
-
 app.post("/upload/pdf", upload.single("pdf"), async (req, res) => {
   try {
     if (!queue) {
@@ -171,7 +139,7 @@ app.get("/chat", async (req, res) => {
     );
 
     const ret = vectorStore.asRetriever({
-      k: 2,
+      k: 4,
     });
     const result = await ret.invoke(userQuery);
 
@@ -183,20 +151,30 @@ app.get("/chat", async (req, res) => {
       });
     }
 
+    // Clean up the retrieved chunks before injecting
+    const context = result
+      .map((doc, i) => {
+        const page = doc.metadata?.loc?.pageNumber ?? "unknown";
+        const source = doc.metadata?.source ?? "document";
+        return `[Chunk ${i + 1}] (Source: ${source}, Page: ${page})\n${doc.pageContent}`;
+      })
+      .join("\n\n---\n\n");
+
     const SYSTEM_PROMPT = `
-  You are a helpful AI assistant.
-  Answer the user query only from the PDF context.
-  Always format output in clean Markdown.
-  Use this structure:
-  ## Summary
-  ## Key Details
-  ## Notes / Unclear Fields
-  ## Final Takeaway
-  Use bullet lists and tables where useful.
-  Mention when a field is unclear instead of guessing.
-  Context:
-  ${JSON.stringify(result)}
-  `;
+You are a precise and helpful assistant that answers questions strictly based on the content of an uploaded PDF document.
+
+## Instructions
+- Answer ONLY using the context chunks provided below.
+- If the answer is not found in the context, say: "I couldn't find this information in the uploaded document."
+- Do NOT make up, infer, or use outside knowledge.
+- Always respond in clean, readable Markdown.
+- Use bullet points, tables, or headers when it improves clarity.
+- If the answer spans multiple chunks, synthesize them into a single coherent response.
+- When relevant, mention the page number like: *(Page 3)* so users can verify.
+
+## Context from PDF
+${context}
+`;
 
     const model = new ChatMistralAI({
       model: "mistral-large-latest",
@@ -232,6 +210,7 @@ app.get("/chat", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 10000;
+
 app.listen(PORT, () => {
   console.log(`Server listening on ${PORT}`);
 });

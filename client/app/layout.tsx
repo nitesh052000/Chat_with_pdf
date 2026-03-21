@@ -5,7 +5,7 @@ import { ClerkProvider,
   SignUp,
   SignedIn,
   SignedOut,
-   } from "@clerk/nextjs";
+} from "@clerk/nextjs";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,14 +28,31 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      appearance={{
+        variables: {
+          colorPrimary: "#10b981", // matches your toast success color
+          borderRadius: "0.5rem",
+        },
+      }}
+    >
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <section>
+        <section className="flex justify-center items-center">
         <SignedOut>
-          <SignUp />
+          <SignUp 
+            appearance={{
+              elements: {
+                card: "shadow-2xl border border-gray-200 rounded-2xl",
+                headerTitle: "text-2xl font-bold text-gray-900",
+                headerSubtitle: "text-gray-500",
+                formButtonPrimary: "shadow-md transition-all hover:scale-[1.02]",
+                socialButtonsBlockButton: "border-gray-300 hover:bg-gray-50 transition-colors",
+              }
+            }}
+          />
         </SignedOut>
         </section>
         <SignedIn>
