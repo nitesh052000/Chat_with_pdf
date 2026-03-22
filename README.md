@@ -22,6 +22,26 @@ It’s perfect for quickly extracting insights, summarizing documents, or findin
 
 ---
 
+---
+
+## 🏗️ Architecture
+
+The application follows a PDF-to-RAG workflow:
+
+1. Users authenticate with **Clerk**.
+2. PDFs are uploaded through the frontend.
+3. The backend stores uploaded PDF files.
+4. A **BullMQ** worker processes the PDF asynchronously.
+5. The worker uses a **PDF loader** to extract content and create chunks.
+6. Chunk embeddings are generated and stored in a **vector database** such as **Qdrant**.
+7. During chat, the system retrieves relevant document chunks.
+8. The LLM uses those chunks as context to answer the user query.
+
+![Architecture](docs/architecture.png)
+
+---
+
+
 ## 📦 Installation
 
 ### 1️⃣ Clone the repository
