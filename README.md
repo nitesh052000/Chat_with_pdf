@@ -37,8 +37,6 @@ The application follows a PDF-to-RAG workflow:
 7. During chat, the system retrieves relevant document chunks.
 8. The LLM uses those chunks as context to answer the user query.
 
-![Architecture](docs/architecture.png)
-
 ---
 
 
