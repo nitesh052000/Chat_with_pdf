@@ -158,20 +158,17 @@ app.get("/chat", async (req, res) => {
       })
       .join("\n\n---\n\n");
 
+    // 1. Clean up the System Prompt (Instructions only)
     const SYSTEM_PROMPT = `
 You are a precise and helpful assistant that answers questions strictly based on the content of an uploaded PDF document.
 
 ## Instructions
-- Answer ONLY using the context chunks provided below.
+- Answer ONLY using the context provided in the user message.
 - If the answer is not found in the context, say: "I couldn't find this information in the uploaded document."
 - Do NOT make up, infer, or use outside knowledge.
 - Always respond in clean, readable Markdown.
 - Use bullet points, tables, or headers when it improves clarity.
-- If the answer spans multiple chunks, synthesize them into a single coherent response.
-- When relevant, mention the page number like: *(Page 3)* so users can verify.
-
-## Context from PDF
-${context}
+- When relevant, mention the page number like: (Page 3).
 `;
 
     const model = new ChatMistralAI({
@@ -180,9 +177,20 @@ ${context}
       temperature: 0,
     });
 
+    // 2. Format the human message to include the context and the query
+    const humanMessageWithContext = `
+## Context from PDF
+${context}
+
+---
+
+## User Question
+${userQuery}
+`;
+
     const messages = [
       new SystemMessage(SYSTEM_PROMPT),
-      new HumanMessage(userQuery),
+      new HumanMessage(humanMessageWithContext),
     ];
 
     const chatResult = await model.invoke(messages);
